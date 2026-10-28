@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NCV Education - Quản Lý Trung Tâm</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="p-4 md:p-6">
+
+<!-- LOGIN -->
+<div id="login-screen" class="fixed inset-0 bg-gray-800 flex justify-center items-center z-50">
+  <div class="bg-white p-8 rounded-lg shadow-xl w-96">
+    <h2 class="text-2xl font-bold mb-6 text-center text-blue-600">NCV Education</h2>
+    <div class="mb-4"><input type="text" id="login-username" class="w-full border p-2 rounded" placeholder="Tài khoản (giamdoc)"></div>
+    <div class="mb-6"><input type="password" id="login-password" onkeypress="if(event.key==='Enter')handleLogin()" class="w-full border p-2 rounded" placeholder="Mật khẩu (123)"></div>
+    <button onclick="handleLogin()" class="w-full bg-blue-600 text-white py-2 rounded font-bold">Đăng nhập</button>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header class="mb-6 flex justify-between items-center flex-wrap gap-2">
+  <h1 class="text-2xl font-bold text-gray-800">🎓 NCV Education Manager</h1>
+  <div class="flex items-center gap-3">
+    <span id="api-status" class="text-xs px-2 py-1 rounded bg-gray-200">⏳ Offline</span>
+    <button onclick="loadAllData(true)" class="text-sm bg-cyan-600 text-white px-3 py-1 rounded hover:bg-cyan-700">🔄 Đồng bộ</button>
+    <button onclick="handleLogout()" class="text-sm text-red-600 hover:underline">Đăng xuất</button>
+  </div>
+</header>
+
+<!-- TABS MENU -->
+<div class="flex border-b mb-6 bg-white rounded-t-lg shadow-sm overflow-x-auto">
+  <button onclick="switchTab('tab-dashboard')" id="btn-tab-dashboard" class="px-5 py-3 text-gray-600 hover:text-blue-600 tab-active whitespace-nowrap">🏠 Trang Chủ</button>
+  <button onclick="switchTab('tab-students')" id="btn-tab-students" class="px-5 py-3 text-gray-600 hover:text-blue-600 whitespace-nowrap">👥 Học Viên</button>
+  <button onclick="switchTab('tab-teachers')" id="btn-tab-teachers" class="px-5 py-3 text-gray-600 hover:text-blue-600 whitespace-nowrap">👨‍🏫 Giáo Viên</button>
+  <button onclick="switchTab('tab-classes')" id="btn-tab-classes" class="px-5 py-3 text-gray-600 hover:text-blue-600 whitespace-nowrap">🏫 Lớp Học</button>
+  <button onclick="switchTab('tab-payment')" id="btn-tab-payment" class="px-5 py-3 text-gray-600 hover:text-blue-600 whitespace-nowrap">💵 Thu Học Phí</button>
+  <button onclick="switchTab('tab-reports')" id="btn-tab-reports" class="px-5 py-3 text-gray-600 hover:text-blue-600 whitespace-nowrap">📈 Báo Cáo</button>
+</div>
+
+<!-- TAB 1: TRANG CHỦ (DASHBOARD) -->
+<div id="tab-dashboard" class="tab-content">
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div class="bg-white p-4 rounded-lg shadow border-l-4 border-blue-500"><div class="text-gray-500 text-sm">Tổng Học Viên</div><div id="stat-student" class="text-2xl font-bold">0</div></div>
+    <div class="bg-white p-4 rounded-lg shadow border-l-4 border-green-500"><div class="text-gray-500 text-sm">Tổng Lớp Đang Mở</div><div id="stat-class" class="text-2xl font-bold">0</div></div>
+    <div class="bg-white p-4 rounded-lg shadow border-l-4 border-purple-500"><div class="text-gray-500 text-sm">Doanh Thu Tháng Này</div><div id="stat-revenue" class="text-2xl font-bold">0 đ</div></div>
+  </div>
+  <div class="bg-white rounded-lg shadow p-4 mb-4">
+    <h3 class="font-bold text-lg text-gray-800">🔔 Cảnh Báo Học Phí (Chu kỳ 8 buổi = 350k)</h3>
+    <p class="text-sm text-gray-500 mb-2">🔴 Đỏ: Đã học ≥ 7 buổi chưa đóng. 🟡 Vàng: Đã học ≥ 5 buổi chưa đóng.</p>
+  </div>
+  <div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-left border-collapse">
+      <thead><tr class="bg-gray-100 text-gray-600 text-sm">
+        <th class="p-3 border-b">Cảnh Báo</th><th class="p-3 border-b">Học Viên</th><th class="p-3 border-b">Lớp Đang Học</th>
+        <th class="p-3 border-b text-center">Đã Học</th><th class="p-3 border-b text-center">Đã Đóng</th><th class="p-3 border-b">Hành Động</th>
+      </tr></thead>
+      <tbody id="dashboard-list"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- TAB 2: HỌC VIÊN -->
+<div id="tab-students" class="tab-content hidden">
+  <div class="flex justify-between mb-4">
+    <input type="text" id="search-student" oninput="renderStudents()" placeholder="🔍 Tìm tên, SĐT, trường..." class="border p-2 rounded w-72">
+    <button onclick="openStudentModal()" class="bg-blue-600 text-white px-4 py-2 rounded font-bold">+ Thêm Học Viên</button>
+  </div>
+  <div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-left border-collapse">
+      <thead><tr class="bg-gray-100 text-gray-600 text-sm">
+        <th class="p-2 border-b text-center">TT</th><th class="p-2 border-b">HỌ</th><th class="p-2 border-b">Tên</th>
+        <th class="p-2 border-b">Năm sinh</th><th class="p-2 border-b">Trường</th><th class="p-2 border-b">Lớp</th>
+        <th class="p-2 border-b">SĐT</th><th class="p-2 border-b">HĐ</th>
+      </tr></thead>
+      <tbody id="student-list"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- TAB 3: GIÁO VIÊN -->
+<div id="tab-teachers" class="tab-content hidden">
+  <div class="flex justify-end mb-4">
+    <button onclick="openTeacherModal()" class="bg-blue-600 text-white px-4 py-2 rounded font-bold">+ Thêm Giáo Viên</button>
+  </div>
+  <div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-left border-collapse">
+      <thead><tr class="bg-gray-100 text-gray-600 text-sm">
+        <th class="p-3 border-b">Mã GV</th><th class="p-3 border-b">Tên Giáo Viên</th>
+        <th class="p-3 border-b">SĐT</th><th class="p-3 border-b">Môn Dạy</th><th class="p-3 border-b">Khối Dạy</th>
+        <th class="p-3 border-b">Hành Động</th>
+      </tr></thead>
+      <tbody id="teacher-list"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- TAB 4: LỚP HỌC -->
+<div id="tab-classes" class="tab-content hidden">
+  <!-- Thanh Công Cụ -->
+  <div id="class-filter" class="bg-white rounded-lg shadow p-3 mb-4 flex items-center justify-between flex-wrap gap-2">
+    <!-- Sẽ được render bằng JS -->
+  </div>
+  
+  <div class="flex justify-end mb-4">
+    <button onclick="openClassModal()" class="bg-blue-600 text-white px-4 py-2 rounded font-bold">+ Xếp Lớp Mới</button>
+  </div>
+  
+  <div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-left border-collapse">
+      <thead><tr class="bg-gray-100 text-gray-600 text-sm">
+        <!-- Thêm cột Checkbox -->
+        <th class="p-3 border-b text-center" style="width: 40px;"><input type="checkbox" id="check-all-classes" onchange="toggleAllClasses(this)" class="w-4 h-4 cursor-pointer"></th>
+        <th class="p-3 border-b">Mã Lớp</th>
+        <th class="p-3 border-b">Tên Lớp</th><th class="p-3 border-b">Môn</th>
+        <th class="p-3 border-b">Khối</th><th class="p-3 border-b">Giáo Viên</th><th class="p-3 border-b">Phòng</th>
+        <th class="p-3 border-b">Ca</th><th class="p-3 border-b">Ngày</th><th class="p-3 border-b">Học Phí</th>
+        <th class="p-3 border-b text-center">Sỉ Số</th>
+        <th class="p-3 border-b text-center">Điểm Danh (Buổi)</th>
+        <th class="p-3 border-b">Hành Động</th>
+      </tr></thead>
+      <tbody id="class-list"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- TAB 6: THU HỌC PHÍ -->
+<div id="tab-payment" class="tab-content hidden">
+  <div class="bg-white rounded-lg shadow p-4 mb-4 relative">
+    <div class="flex gap-4 items-end flex-wrap mb-4">
+      <div class="w-64 relative">
+        <label class="block text-sm font-medium mb-1">Tìm Học Viên (Tên hoặc SĐT)</label>
+        <input type="text" id="pay-search-hv" oninput="searchStudentForPayment()" placeholder="Nhập tên hoặc SĐT..." class="border p-2 rounded w-full" autocomplete="off">
+        <div id="pay-search-results" class="absolute z-10 w-full bg-white border rounded shadow-lg hidden max-h-48 overflow-y-auto mt-1"></div>
+      </div>
+      <input type="hidden" id="pay-student-id">
+      
+      <div class="flex-1 min-w-[200px]">
+        <label class="block text-sm font-medium mb-1 text-blue-600">Học Viên Đang Chọn</label>
+        <div id="pay-selected-hv" class="border p-2 rounded bg-gray-50 font-bold text-gray-700">Chưa chọn ai</div>
+      </div>
+      
+      <div class="min-w-[250px]">
+        <label class="block text-sm font-medium mb-1">Lớp Đăng Ký</label>
+        <select id="pay-class-id" class="border p-2 rounded w-full" disabled></select>
+      </div>
+    </div>
+
+    <div class="flex gap-4 items-end flex-wrap border-t pt-4">
+      <div><label class="block text-sm font-medium mb-1">Số tiền</label><input type="number" id="pay-amount" class="border p-2 rounded w-32" value="350000"></div>
+      <div><label class="block text-sm font-medium mb-1">Số buổi</label><input type="number" id="pay-cycle" class="border p-2 rounded w-24" value="8"></div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Hình thức thu</label>
+        <select id="pay-method" class="border p-2 rounded w-40">
+          <option value="Tiền mặt">Tiền mặt</option>
+          <option value="Chuyển khoản">Chuyển khoản</option>
+          <option value="Giáo viên thu">Giáo viên thu</option>
+        </select>
+      </div>
+        <!-- THÊM Ô GHI CHÚ -->
+      <div>
+        <label class="block text-sm font-medium mb-1">Ghi chú</label>
+        <input type="text" id="pay-note" class="border p-2 rounded w-48" placeholder="VD: Đóng tiền tháng 10...">
+      </div>
+      <button onclick="savePayment()" id="btn-pay" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-bold h-10 disabled:bg-gray-400">💵 Thu Tiền</button>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-left border-collapse">
+      <thead><tr class="bg-gray-100 text-gray-600 text-sm">
+        <th class="p-3 border-b">Mã PT</th>
+        <th class="p-3 border-b">Học Viên</th>
+        <th class="p-3 border-b">Lớp</th>
+        <th class="p-3 border-b">Số Tiền</th>
+        <th class="p-3 border-b text-center">Số Buổi</th>
+        <th class="p-3 border-b">Ngày Đóng</th>
+        <th class="p-3 border-b">Ghi chú</th>
+        <th class="p-3 border-b text-center">Hành Động</th>
+      </tr></thead>
+      <tbody id="payment-list"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- TAB 7: BÁO CÁO -->
+<div id="tab-reports" class="tab-content hidden">
+  <div class="bg-white rounded-lg shadow p-4 mb-4 flex gap-4 items-end flex-wrap">
+    <div>
+      <label class="block text-sm font-medium mb-1">Thống kê theo</label>
+      <select id="rp-type" onchange="changeReportType()" class="border p-2 rounded w-48">
+        <option value="month">Theo Tháng</option>
+        <option value="class">Theo Lớp Học</option>
+        <option value="teacher">Theo Giáo Viên</option>
+      </select>
+    </div>
+    
+    <div id="rp-filter-month">
+      <label class="block text-sm font-medium mb-1">Chọn Tháng</label>
+      <input type="month" id="rp-month" class="border p-2 rounded">
+    </div>
+    
+    <div id="rp-filter-class" class="hidden">
+      <label class="block text-sm font-medium mb-1">Chọn Lớp</label>
+      <select id="rp-class" class="border p-2 rounded w-64"></select>
+    </div>
+    
+    <div id="rp-filter-teacher" class="hidden">
+      <label class="block text-sm font-medium mb-1">Chọn Giáo Viên</label>
+      <select id="rp-teacher" class="border p-2 rounded w-64"></select>
+    </div>
+    
+    <div>
+      <label class="block text-sm font-medium mb-1">Hình thức thu</label>
+      <select id="rp-method" class="border p-2 rounded w-40">
+        <option value="all">Tất cả</option>
+        <option value="Tiền mặt">Tiền mặt</option>
+        <option value="Chuyển khoản">Chuyển khoản</option>
+        <option value="Giáo viên thu">Giáo viên thu</option>
+      </select>
+    </div>
+
+    <!-- NÚT THỐNG KÊ (Làm nhiệm vụ lọc báo cáo VÀ tính lương) -->
+    <button onclick="executeReport()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-bold h-10">📊 Thống Kê</button>
+  </div>
+
+  <!-- Thẻ tóm tắt doanh thu -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    <div class="p-4 border rounded bg-blue-50 shadow">
+      <div class="text-gray-500" id="rp-label-st">Tổng Học Viên</div>
+      <div id="rp-total-st" class="text-3xl font-bold text-blue-700">0</div>
+    </div>
+    <div class="p-4 border rounded bg-green-50 shadow">
+      <div class="text-gray-500" id="rp-total-label">Tổng Doanh Thu</div>
+      <div id="rp-total-money" class="text-3xl font-bold text-green-700">0 đ</div>
+    </div>
+  </div>
+
+  <!-- KHU VỰC BẢNG LƯƠNG (Hiển thị khi lọc theo Giáo Viên) -->
+  <div id="chot-thang-area" class="bg-white rounded-lg shadow p-4 mb-6 hidden border-l-4 border-purple-500">
+    <h3 class="font-bold text-lg text-purple-700 mb-4">Bảng Lương: <span id="ct-month-label"></span></h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead><tr class="bg-gray-100 text-gray-600 text-sm">
+          <th class="p-3 border-b">Giáo Viên</th>
+          <th class="p-3 border-b">Lớp Dạy</th>
+          <th class="p-3 border-b text-center">Số Buổi Dạy</th>
+          <th class="p-3 border-b text-center">Số Học Viên</th>
+          <th class="p-3 border-b text-right">Trung Tâm Thu</th>
+          <th class="p-3 border-b text-right">Giáo Viên Thu</th>
+          <th class="p-3 border-b text-right">Lương (Tùy chỉnh)</th>
+        </tr></thead>
+        <tbody id="chot-thang-list"></tbody>
+      </table>
+    </div>
+      <div class="flex justify-end mt-4 gap-2">
+       <button onclick="xuatFileLuong()" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded font-bold">📥 Xuất File Lương (Excel)</button>
+       <button onclick="luuBangLuong()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded font-bold">💾 Lưu Bảng Lương Vào Sheet</button>
+    </div>
+  </div>
+
+      <!-- BẢNG CHI TIẾT GIAO DỊCH -->
+  <div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-left border-collapse">
+      <thead id="rp-thead">
+        <!-- Nội dung sẽ được JS tự động vẽ lại -->
+      </thead>
+      <tbody id="rp-detail-list"></tbody>
+    </table>
+  </div>
+</div> <!-- THÊM DÒNG NÀY ĐỂ ĐÓNG TAB BÁO CÁO -->
+
+<!-- MODALS -->
+
+<!-- 3. Modal Lớp Học (Thêm/Sửa) -->
+<div id="class-modal" class="modal">
+  <div class="bg-white p-6 rounded-lg w-[600px] shadow-xl">
+    <h3 id="cls-modal-title" class="font-bold text-lg mb-4">Xếp Lớp Mới</h3>
+    <input type="hidden" id="cls-id">
+    <div class="grid grid-cols-2 gap-4 mb-4">
+      <div>
+        <label class="block text-sm">Tên Lớp * (Tự động tạo)</label>
+        <!-- Thêm readonly để người dùng không sửa, chỉ hiển thị -->
+        <input type="text" id="cls-name" class="w-full border p-2 rounded bg-gray-100 font-bold text-blue-700" readonly placeholder="Tự động điền...">
+      </div>
+      <div><label class="block text-sm">Môn *</label><input type="text" id="cls-subject" oninput="autoGenerateClassName()" class="w-full border p-2 rounded"></div>
+      <div><label class="block text-sm">Khối *</label><input type="number" id="cls-grade" oninput="autoGenerateClassName()" class="w-full border p-2 rounded"></div>
+      <div>
+        <label class="block text-sm">Giáo Viên *</label>
+        <select id="cls-teacher" onchange="autoGenerateClassName()" class="w-full border p-2 rounded"></select>
+      </div>
+      <div>
+        <label class="block text-sm">Phòng *</label>
+        <select id="cls-room" class="w-full border p-2 rounded">
+          <option>P1</option><option>P2</option><option>P3</option><option>P4</option><option>P5</option><option>P6</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm">Ca *</label>
+        <select id="cls-shift" class="w-full border p-2 rounded">
+          <option>Ca 1</option><option>Ca 2</option><option>Ca 3</option><option>Ca 4</option><option>Ca 5</option><option>Ca 6</option>
+        </select>
+      </div>
+      <div><label class="block text-sm">Ngày *</label><input type="text" id="cls-days" oninput="autoGenerateClassName()" class="w-full border p-2 rounded" placeholder="VD: T2-T4"></div>
+      <div><label class="block text-sm">Học Phí *</label><input type="number" id="cls-fee" class="w-full border p-2 rounded" value="350000"></div>
+    </div>
+    <div class="flex justify-end gap-2">
+      <button onclick="document.getElementById('class-modal').classList.remove('open')" class="px-4 py-2 border rounded">Hủy</button>
+      <button onclick="saveClass()" class="px-6 py-2 bg-blue-600 text-white rounded font-bold">Lưu Lớp Học</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Hồ Sơ Học Viên -->
+<div id="student-profile-modal" class="modal">
+  <div class="bg-white p-6 rounded-lg w-[650px] shadow-xl max-h-[90vh] overflow-y-auto">
+    <div class="flex justify-between items-center mb-4 border-b pb-2">
+      <h3 class="font-bold text-lg text-blue-700">Hồ Sơ Học Viên</h3>
+      <button onclick="document.getElementById('student-profile-modal').classList.remove('open')" class="text-gray-500 hover:text-red-500 font-bold text-2xl leading-none">&times;</button>
+    </div>
+    <div class="mb-4 text-sm" id="profile-info"></div>
+    <h4 class="font-bold text-md mb-2">Các Lớp Đã Đăng Ký</h4>
+    <div class="border rounded overflow-hidden">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-gray-100"><tr>
+          <th class="p-2 border-b">Lớp</th>
+          <th class="p-2 border-b">Giáo Viên</th>
+          <th class="p-2 border-b">Học Phí</th>
+          <th class="p-2 border-b">Ngày ĐK</th>
+          <th class="p-2 border-b">Thao Tác</th>
+        </tr></thead>
+        <tbody id="profile-classes"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Xem Tiến Độ Học Viên -->
+<div id="student-progress-modal" class="modal">
+  <div class="bg-white p-6 rounded-lg w-[800px] shadow-xl max-h-[90vh] overflow-y-auto">
+    <div class="flex justify-between items-center mb-4 border-b pb-2">
+      <h3 class="font-bold text-lg text-blue-700">Tiến Độ Học Tập: <span id="sp-name" class="text-red-600"></span></h3>
+      <button onclick="document.getElementById('student-progress-modal').classList.remove('open')" class="text-gray-500 hover:text-red-500 font-bold text-2xl leading-none">&times;</button>
+    </div>
+    
+    <div class="bg-gray-50 p-4 rounded mb-4 text-sm grid grid-cols-2 gap-2" id="sp-info"></div>
+
+    <h4 class="font-bold mb-2">Các Lớp Đã Đăng Ký & Số Buổi Học</h4>
+    <div class="overflow-x-auto border rounded">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-gray-100">
+          <tr>
+            <th class="p-3 border-b">Lớp</th>
+            <th class="p-3 border-b">Giáo Viên</th>
+            <th class="p-3 border-b text-center">Tổng Buổi Lớp</th>
+            <th class="p-3 border-b text-center">Học Viên Đã Học</th>
+            <th class="p-3 border-b text-center">Hành Động</th>
+          </tr>
+        </thead>
+        <tbody id="sp-class-list"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<!-- Modal Thu Tiền Nhanh Từ Trang Chủ -->
+<div id="quick-pay-modal" class="modal">
+  <div class="bg-white p-6 rounded-lg w-[600px] shadow-xl">
+    <div class="flex justify-between items-center mb-4 border-b pb-2">
+      <h3 class="font-bold text-lg text-blue-700">Thu Học Phí: <span id="qp-student-name" class="text-red-600"></span></h3>
+      <button onclick="document.getElementById('quick-pay-modal').classList.remove('open')" class="text-gray-500 hover:text-red-500 font-bold text-2xl leading-none">&times;</button>
+    </div>
+    
+    <div class="mb-4">
+      <label class="block text-sm font-medium mb-1">Lớp Đang Nợ</label>
+      <select id="qp-class-id" class="border p-2 rounded w-full bg-gray-50" disabled></select>
+    </div>
+
+    <div class="flex gap-4 items-end flex-wrap border-t pt-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">Số tiền</label>
+        <input type="number" id="qp-amount" class="border p-2 rounded w-32" value="350000">
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Số buổi</label>
+        <input type="number" id="qp-cycle" class="border p-2 rounded w-24" value="8">
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Hình thức thu</label>
+        <select id="qp-method" class="border p-2 rounded w-40">
+          <option value="Tiền mặt">Tiền mặt</option>
+          <option value="Chuyển khoản">Chuyển khoản</option>
+          <option value="Giáo viên thu">Giáo viên thu</option>
+        </select>
+      </div>
+      <!-- THÊM Ô GHI CHÚ VÀO MODAL NHANH -->
+      <div>
+        <label class="block text-sm font-medium mb-1">Ghi chú</label>
+        <input type="text" id="qp-note" class="border p-2 rounded w-48" placeholder="Ghi chú...">
+      </div>
+      <button onclick="executeQuickPay()" id="btn-qp-submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-bold h-10">💵 Thu Tiền</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Gán Lớp Cho Học Viên -->
+<div id="assign-class-modal" class="modal">
+  <div class="bg-white p-6 rounded-lg w-[500px] shadow-xl max-h-[90vh] overflow-y-auto">
+    <div class="flex justify-between items-center mb-4 border-b pb-2">
+      <h3 class="font-bold text-lg text-blue-700">Gán Lớp Cho: <span id="assign-st-name" class="text-red-600"></span></h3>
+      <button onclick="document.getElementById('assign-class-modal').classList.remove('open')" class="text-gray-500 hover:text-red-500 font-bold text-2xl leading-none">&times;</button>
+    </div>
+    <input type="hidden" id="assign-st-id">
+    <p class="text-sm text-gray-500 mb-3">Tick vào các lớp bên dưới để xếp học viên vào lớp. Bỏ tick để xóa khỏi lớp.</p>
+    <div id="assign-class-list" class="space-y-2 max-h-64 overflow-y-auto border p-2 rounded bg-gray-50"></div>
+  </div>
+</div>
+
+<!-- 2. Modal Giáo Viên (Thêm/Sửa) -->
+<div id="teacher-modal" class="modal">
+  <div class="bg-white p-6 rounded-lg w-[500px] shadow-xl">
+    <h3 id="gv-modal-title" class="font-bold text-lg mb-4">Thêm Giáo Viên</h3>
+    <input type="hidden" id="gv-id">
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="col-span-2"><label class="block text-sm">Tên GV *</label><input type="text" id="gv-name" class="w-full border p-2 rounded"></div>
+      <div><label class="block text-sm">SĐT</label><input type="text" id="gv-phone" class="w-full border p-2 rounded"></div>
+      <div><label class="block text-sm">Môn Dạy</label><input type="text" id="gv-subjects" placeholder="Toán, Lý" class="w-full border p-2 rounded"></div>
+      <div class="col-span-2"><label class="block text-sm">Khối Dạy</label><input type="text" id="gv-grades" placeholder="8, 9, 10" class="w-full border p-2 rounded"></div>
+    </div>
+    <div class="flex justify-end gap-2">
+      <button onclick="document.getElementById('teacher-modal').classList.remove('open')" class="px-4 py-2 border rounded">Hủy</button>
+      <button onclick="saveTeacher()" class="px-6 py-2 bg-blue-600 text-white rounded font-bold">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- 3. Modal Lớp Học (Thêm/Sửa) -->
+<div id="class-modal" class="modal">
+  <div class="bg-white p-6 rounded-lg w-[600px] shadow-xl">
+    <h3 id="cls-modal-title" class="font-bold text-lg mb-4">Xếp Lớp Mới</h3>
+    <input type="hidden" id="cls-id">
+    <div class="grid grid-cols-2 gap-4 mb-4">
+      <div><label class="block text-sm">Tên Lớp *</label><input type="text" id="cls-name" class="w-full border p-2 rounded" placeholder="VD: Toán 8A"></div>
+      <div><label class="block text-sm">Môn *</label><input type="text" id="cls-subject" class="w-full border p-2 rounded"></div>
+      <div><label class="block text-sm">Khối *</label><input type="number" id="cls-grade" class="w-full border p-2 rounded"></div>
+      <div>
+        <label class="block text-sm">Giáo Viên *</label>
+        <select id="cls-teacher" class="w-full border p-2 rounded"></select>
+      </div>
+      <div>
+        <label class="block text-sm">Phòng *</label>
+        <select id="cls-room" class="w-full border p-2 rounded">
+          <option>P1</option><option>P2</option><option>P3</option><option>P4</option><option>P5</option><option>P6</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm">Ca *</label>
+        <select id="cls-shift" class="w-full border p-2 rounded">
+          <option>Ca 1</option><option>Ca 2</option><option>Ca 3</option><option>Ca 4</option><option>Ca 5</option><option>Ca 6</option>
+        </select>
+      </div>
+      <div><label class="block text-sm">Ngày *</label><input type="text" id="cls-days" class="w-full border p-2 rounded" placeholder="VD: T2-T4"></div>
+      <div><label class="block text-sm">Học Phí *</label><input type="number" id="cls-fee" class="w-full border p-2 rounded" value="350000"></div>
+    </div>
+    <div class="flex justify-end gap-2">
+      <button onclick="document.getElementById('class-modal').classList.remove('open')" class="px-4 py-2 border rounded">Hủy</button>
+      <button onclick="saveClass()" class="px-6 py-2 bg-blue-600 text-white rounded font-bold">Lưu Lớp Học</button>
+    </div>
+  </div>
+</div>
+
+<!-- 4. Modal Chi Tiết Lớp Học -->
+<div id="class-detail-modal" class="modal">
+  <div class="bg-white p-6 rounded-lg w-[800px] shadow-xl max-h-[90vh] overflow-y-auto">
+    <div class="flex justify-between items-center mb-4 border-b pb-2">
+      <h3 class="font-bold text-lg text-blue-700">Chi Tiết Lớp: <span id="cd-name"></span></h3>
+      <button onclick="document.getElementById('class-detail-modal').classList.remove('open')" class="text-gray-500 hover:text-red-500 font-bold text-2xl leading-none">&times;</button>
+    </div>
+    
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+      <div class="bg-blue-50 p-3 rounded border border-blue-100">
+        <div class="text-xs text-gray-500">Giáo Viên</div>
+        <div id="cd-teacher" class="font-bold text-blue-800"></div>
+      </div>
+      <div class="bg-green-50 p-3 rounded border border-green-100">
+        <div class="text-xs text-gray-500">Môn Học</div>
+        <div id="cd-subject" class="font-bold text-green-800"></div>
+      </div>
+      <div class="bg-purple-50 p-3 rounded border border-purple-100">
+        <div class="text-xs text-gray-500">Học Phí Lớp</div>
+        <div id="cd-fee" class="font-bold text-purple-800"></div>
+      </div>
+      <div class="bg-orange-50 p-3 rounded border border-orange-100">
+        <div class="text-xs text-gray-500">Sỉ Số Lớp</div>
+        <div id="cd-size" class="font-bold text-orange-800"></div>
+      </div>
+    </div>
+
+    <div class="bg-yellow-50 p-4 rounded mb-4 flex justify-between items-center border border-yellow-200">
+      <span class="font-semibold text-gray-700">Tổng Thu Lớp Này:</span>
+      <span id="cd-total" class="text-xl font-bold text-yellow-600"></span>
+    </div>
+
+    <div class="flex justify-between items-center mb-2 mt-4">
+      <h4 class="font-bold">Danh Sách Học Viên (<span id="cd-list-count"></span>)</h4>
+      <button onclick="openEnrollModal()" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">+ Thêm Học Viên</button>
+    </div>
+    <div class="overflow-x-auto border rounded max-h-64 overflow-y-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-gray-100 sticky top-0">
+          <tr><th class="p-2 border-b">STT</th><th class="p-2 border-b">Họ Tên</th><th class="p-2 border-b">SĐT PH</th><th class="p-2 border-b">Thao Tác</th></tr>
+        </thead>
+        <tbody id="cd-student-list"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 5. Modal Đăng Ký Lớp -->
+<div id="enroll-modal" class="modal">
+  <div class="bg-white p-6 rounded-lg w-[500px] shadow-xl relative">
+    <h3 class="font-bold text-lg mb-4 text-blue-700">Thêm Học Viên Vào Lớp <span id="enroll-cls-name" class="text-red-600"></span></h3>
+    <input type="hidden" id="enroll-cls-id">
+    <div class="mb-4 relative">
+      <label class="block text-sm font-medium mb-1">Tìm Học Viên (Tên hoặc SĐT)</label>
+      <input type="text" id="enroll-search-hv" oninput="searchStudentForEnroll()" placeholder="Nhập tên hoặc SĐT..." class="border p-2 rounded w-full" autocomplete="off">
+      <div id="enroll-search-results" class="absolute z-10 w-full bg-white border rounded shadow-lg hidden max-h-48 overflow-y-auto mt-1"></div>
+    </div>
+    <div class="mb-4">
+      <label class="block text-sm font-medium mb-1">Học Viên Đã Chọn</label>
+      <div id="enroll-selected-hv" class="border p-2 rounded bg-gray-50 text-blue-700 font-bold">Chưa chọn ai</div>
+      <input type="hidden" id="enroll-student-id">
+    </div>
+    <div class="flex justify-end gap-2 mt-6">
+      <button onclick="document.getElementById('enroll-modal').classList.remove('open')" class="px-4 py-2 border rounded">Hủy</button>
+      <button onclick="saveEnrollment()" class="px-6 py-2 bg-green-600 text-white rounded font-bold disabled:bg-gray-400" id="btn-save-enroll" disabled>Đăng Ký</button>
+    </div>
+  </div>
+</div>
+
+<!-- 6. Modal In Hóa Đơn -->
+<div id="invoice-modal" class="modal">
+  <div class="bg-white p-8 rounded-lg w-[800px] shadow-xl max-h-[95vh] overflow-y-auto" id="invoice-content"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/state.js"></script>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/students.js"></script>
+<script src="js/teachers.js"></script>
+<script src="js/classes.js"></script>
+<script src="js/payment.js"></script>
+<script src="js/reports.js"></script>
+<script src="js/shortcuts.js"></script>
+<script src="js/toast.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+let db = { students: [], teachers: [], classes: [], payments: [], enrollments: [], salaries: [], attendances: [] };

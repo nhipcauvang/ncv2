@@ -165,11 +165,29 @@ async function saveAssignClasses() {
 }
 
 function openStudentModal() {
-  document.getElementById('st-modal-title').innerText = 'Thêm Học Viên';
-  document.getElementById('st-id').value = '';
-  ['st-ho','st-ten','st-by','st-school','st-class','st-phone','st-cccd','st-address'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('st-fee').value = 350000;
-  document.getElementById('student-modal').classList.add('open');
+  // 1. Kiểm tra xem form có tồn tại trong HTML không
+  const modal = document.getElementById('student-modal');
+  if (!modal) {
+    alert("LỖI: Không tìm thấy thẻ <div id='student-modal'> trong file HTML. Hãy chắc chắn bạn đã lưu file index.html!");
+    return;
+  }
+
+  // 2. Đổi tiêu đề
+  const title = document.getElementById('st-modal-title');
+  if (title) title.innerText = 'Thêm Học Viên';
+
+  // 3. Reset các ô nhập liệu (Bọc kiểm tra an toàn)
+  const fields = ['st-id', 'st-ho', 'st-ten', 'st-by', 'st-school', 'st-class', 'st-phone', 'st-cccd', 'st-address'];
+  fields.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  
+  const feeEl = document.getElementById('st-fee');
+  if (feeEl) feeEl.value = 350000;
+
+  // 4. Hiển thị Modal
+  modal.classList.add('open');
 }
 function editStudent(stt) {
   const s = db.students.find(x => x.stt == stt);
